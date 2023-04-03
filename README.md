@@ -1,4 +1,4 @@
-# @collabland/example-dev-action
+# @collabland/example-poll-action
 
 This example illustrates how to implement a Collab action for Discord using
 different interaction types:
@@ -21,9 +21,9 @@ ngrok http 3000
 In your Discord server:
 
 ```
-/test-flight install <https-url-from-ngrok>/dev-action
+/test-flight install <https-url-from-ngrok>/poll-action
 ```
 
-![Slash commands](docs/dev-action-commands.png)
+![Slash commands](docs/poll-action-commands.png)
 
-![Screenshot](docs/dev-action.png)
+![Screenshot](docs/poll-action.png)

@@ -48,7 +48,7 @@ export async function main(config: ApplicationConfig = {}, publicKey?: string) {
 
   const url = app.restServer.url;
   if (config.rest == null) {
-    console.log(`Dev action is running at ${url}`);
+    console.log(`Poll action is running at ${url}`);
   }
   return {app, signingKey};
 }

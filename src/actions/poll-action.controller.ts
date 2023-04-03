@@ -1,12 +1,11 @@
 // Copyright Abridged, Inc. 2023. All Rights Reserved.
-// Node module: @collabland/example-dev-action
+// Node module: @collabland/example-poll-action
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
 import {HttpErrors, stringify} from '@collabland/common';
 import {
   APIInteractionResponse,
-  ApplicationCommandOptionType,
   ApplicationCommandSpec,
   ApplicationCommandType,
   BaseDiscordActionController,
@@ -21,8 +20,8 @@ import {MiniAppManifest} from '@collabland/models';
 import {BindingScope, injectable} from '@loopback/core';
 import {api, get, param} from '@loopback/rest';
 import {
-  ActionRowBuilder,
   APIInteraction,
+  ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
@@ -45,8 +44,8 @@ import {
 @injectable({
   scope: BindingScope.SINGLETON,
 })
-@api({basePath: '/dev-action'}) // Set the base path to `/dev-action`
-export class DevActionController extends BaseDiscordActionController {
+@api({basePath: '/poll-action'}) // Set the base path to `/poll-action`
+export class PollActionController extends BaseDiscordActionController {
   private interactions: {
     request: DiscordActionRequest<APIInteraction>;
     response: APIInteractionResponse;
@@ -84,11 +83,11 @@ export class DevActionController extends BaseDiscordActionController {
        * Miniapp manifest
        */
       manifest: new MiniAppManifest({
-        appId: 'dev-action',
+        appId: 'poll-action',
         developer: 'collab.land',
-        name: 'DevAction',
+        name: 'PollAction',
         platforms: ['discord'],
-        shortName: 'dev-action',
+        shortName: 'poll-action',
         version: {name: '0.0.1'},
         website: 'https://collab.land',
         description:
@@ -118,22 +117,22 @@ export class DevActionController extends BaseDiscordActionController {
   ): Promise<DiscordActionResponse> {
     if (
       interaction.type === InteractionType.MessageComponent &&
-      interaction.data.custom_id === 'dev:button:modal'
+      interaction.data.custom_id === 'poll:button:modal'
     ) {
       const data = new ModalBuilder()
         .setTitle('Example modal')
-        .setCustomId('dev:modal:modal')
+        .setCustomId('poll:modal:modal')
         .addComponents(
           new ActionRowBuilder<ModalActionRowComponentBuilder>().addComponents(
             new TextInputBuilder()
-              .setCustomId('dev:text:interaction')
+              .setCustomId('poll:text:interaction')
               .setLabel('Interaction')
               .setStyle(TextInputStyle.Paragraph)
               .setValue(this.describeInteraction(interaction)),
           ),
           new ActionRowBuilder<ModalActionRowComponentBuilder>().addComponents(
             new TextInputBuilder()
-              .setCustomId('dev:text:interaction-data')
+              .setCustomId('poll:text:interaction-data')
               .setLabel('Interaction data')
               .setStyle(TextInputStyle.Paragraph)
               .setValue(this.renderInteractionData(interaction, false)),
@@ -165,16 +164,16 @@ export class DevActionController extends BaseDiscordActionController {
               new ButtonBuilder()
                 .setLabel('link: Request/response')
                 .setURL(
-                  `http://localhost:3000/dev-action/interactions/${interaction.id}`,
+                  `http://localhost:3000/poll-action/interactions/${interaction.id}`,
                 )
                 .setStyle(ButtonStyle.Link),
               new ButtonBuilder()
                 .setLabel('button: Click me')
-                .setCustomId('dev:button:click')
+                .setCustomId('poll:button:click')
                 .setStyle(ButtonStyle.Success),
               new ButtonBuilder()
                 .setLabel('button: Render a modal')
-                .setCustomId('dev:button:modal')
+                .setCustomId('poll:button:modal')
                 .setStyle(ButtonStyle.Primary),
             ])
             .toJSON(),
@@ -182,7 +181,7 @@ export class DevActionController extends BaseDiscordActionController {
           new ActionRowBuilder<MessageActionRowComponentBuilder>()
             .addComponents(
               new StringSelectMenuBuilder()
-                .setCustomId('dev:select:string')
+                .setCustomId('poll:select:string')
                 .setPlaceholder('string-select-menu: Select a color')
                 .addOptions(
                   new StringSelectMenuOptionBuilder()
@@ -201,7 +200,7 @@ export class DevActionController extends BaseDiscordActionController {
           new ActionRowBuilder<MessageActionRowComponentBuilder>()
             .addComponents(
               new RoleSelectMenuBuilder()
-                .setCustomId('dev:select:role')
+                .setCustomId('poll:select:role')
                 .setPlaceholder('role-select-menu: Select a role'),
             )
             .toJSON(),
@@ -209,11 +208,11 @@ export class DevActionController extends BaseDiscordActionController {
           new ActionRowBuilder<MessageActionRowComponentBuilder>()
             .addComponents(
               new UserSelectMenuBuilder()
-                .setCustomId('dev:select:user')
+                .setCustomId('poll:select:user')
                 .setPlaceholder('user-select-menu: Select a user'),
               /*
               new ChannelSelectMenuBuilder()
-                .setCustomId('dev:select:channel')
+                .setCustomId('poll:select:channel')
                 .setPlaceholder('channel-select-menu: Select a channel'),
                 */
             )
@@ -259,22 +258,22 @@ User name: ${interaction.member?.user.username}#${interaction.member?.user.discr
       {
         // Handle slash command
         type: InteractionType.ApplicationCommand,
-        names: ['dev*'],
+        names: ['poll*'],
       },
       {
         // Handle slash command with auto complete
         type: InteractionType.ApplicationCommandAutocomplete,
-        names: ['dev*'],
+        names: ['poll*'],
       },
       {
         // Handle buttons/selections
         type: InteractionType.MessageComponent,
-        ids: ['dev:*'],
+        ids: ['poll:*'],
       },
       {
         // Handle modal
         type: InteractionType.ModalSubmit,
-        ids: ['dev:*'],
+        ids: ['poll:*'],
       },
     ];
   }
@@ -286,112 +285,16 @@ User name: ${interaction.member?.user.username}#${interaction.member?.user.discr
    */
   private getApplicationCommands(): ApplicationCommandSpec[] {
     const commands: ApplicationCommandSpec[] = [
-      // `/dev-action` slash command
+      // `/poll-action` slash command
       {
         metadata: {
-          name: 'DevAction',
-          shortName: 'dev-action',
-          supportedEnvs: ['dev', 'qa', 'staging'],
+          name: 'PollAction',
+          shortName: 'poll-action',
+          supportedEnvs: ['poll', 'qa', 'staging'],
         },
         type: ApplicationCommandType.ChatInput,
-        name: 'dev',
-        description: 'Collab.Land root command',
-        options: [
-          {
-            name: 'user',
-            description: 'Get or edit permissions for a user',
-            type: ApplicationCommandOptionType.SubcommandGroup,
-            options: [
-              {
-                name: 'get',
-                description: 'Get permissions for a user',
-                type: ApplicationCommandOptionType.Subcommand,
-                options: [
-                  {
-                    name: 'user',
-                    description: 'The user to get',
-                    type: ApplicationCommandOptionType.User,
-                    required: true,
-                  },
-                  {
-                    name: 'channel',
-                    description:
-                      'The channel permissions to get. If omitted, the guild permissions will be returned',
-                    type: ApplicationCommandOptionType.Channel,
-                    required: false,
-                  },
-                ],
-              },
-              {
-                name: 'edit',
-                description: 'Edit permissions for a user',
-                type: ApplicationCommandOptionType.Subcommand,
-                options: [
-                  {
-                    name: 'user',
-                    description: 'The user to edit',
-                    type: ApplicationCommandOptionType.User,
-                    required: true,
-                  },
-                  {
-                    name: 'channel',
-                    description:
-                      'The channel permissions to edit. If omitted, the guild permissions will be edited',
-                    type: ApplicationCommandOptionType.Channel,
-                    required: false,
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            name: 'role',
-            description: 'Get or edit permissions for a role',
-            type: ApplicationCommandOptionType.SubcommandGroup,
-            options: [
-              {
-                name: 'get',
-                description: 'Get permissions for a role',
-                type: ApplicationCommandOptionType.Subcommand,
-                options: [
-                  {
-                    name: 'role',
-                    description: 'The role to get',
-                    type: ApplicationCommandOptionType.Role,
-                    required: true,
-                  },
-                  {
-                    name: 'channel',
-                    description:
-                      'The channel permissions to get. If omitted, the guild permissions will be returned',
-                    type: ApplicationCommandOptionType.Channel,
-                    required: false,
-                  },
-                ],
-              },
-              {
-                name: 'edit',
-                description: 'Edit permissions for a role',
-                type: ApplicationCommandOptionType.Subcommand,
-                options: [
-                  {
-                    name: 'role',
-                    description: 'The role to edit',
-                    type: ApplicationCommandOptionType.Role,
-                    required: true,
-                  },
-                  {
-                    name: 'channel',
-                    description:
-                      'The channel permissions to edit. If omitted, the guild permissions will be edited',
-                    type: ApplicationCommandOptionType.Channel,
-                    required: false,
-                  },
-                ],
-              },
-            ],
-          },
-        ],
+        name: 'poll',
+        description: 'Poll command',
       },
     ];
     return commands;

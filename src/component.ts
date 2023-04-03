@@ -4,11 +4,11 @@
 // License text available at https://opensource.org/licenses/MIT
 
 import {Component} from '@loopback/core';
-import {DevActionController} from './actions/dev-action.controller.js';
+import {PollActionController} from './actions/poll-action.controller.js';
 
 /**
  * Register all services including command handlers, job runners and services
  */
 export class DevActionComponent implements Component {
-  controllers = [DevActionController];
+  controllers = [PollActionController];
 }

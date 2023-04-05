@@ -3,7 +3,7 @@
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
-import {HttpErrors, stringify} from '@collabland/common';
+import { HttpErrors } from '@collabland/common';
 import {
   APIInteractionResponse,
   ApplicationCommandSpec,
@@ -14,27 +14,15 @@ import {
   DiscordActionResponse,
   DiscordInteractionPattern,
   InteractionResponseType,
-  InteractionType,
+  InteractionType
 } from '@collabland/discord';
-import {MiniAppManifest} from '@collabland/models';
-import {BindingScope, injectable} from '@loopback/core';
-import {api, get, param} from '@loopback/rest';
+import { MiniAppManifest } from '@collabland/models';
+import { BindingScope, injectable } from '@loopback/core';
+import { api, get, param } from '@loopback/rest';
 import {
-  APIInteraction,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  EmbedBuilder,
-  MessageActionRowComponentBuilder,
-  MessageFlags,
-  ModalActionRowComponentBuilder,
-  ModalBuilder,
-  RoleSelectMenuBuilder,
-  StringSelectMenuBuilder,
-  StringSelectMenuOptionBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  UserSelectMenuBuilder,
+  ActionRowBuilder, APIInteraction, ButtonBuilder, ButtonStyle, ComponentType, EmbedBuilder, MessageActionRowComponentBuilder, ModalActionRowComponentBuilder,
+  ModalBuilder, TextInputBuilder,
+  TextInputStyle
 } from 'discord.js';
 
 /**
@@ -44,7 +32,7 @@ import {
 @injectable({
   scope: BindingScope.SINGLETON,
 })
-@api({basePath: '/poll-action'}) // Set the base path to `/poll-action`
+@api({ basePath: '/poll-action' }) // Set the base path to `/poll-action`
 export class PollActionController extends BaseDiscordActionController {
   private interactions: {
     request: DiscordActionRequest<APIInteraction>;
@@ -88,7 +76,7 @@ export class PollActionController extends BaseDiscordActionController {
         name: 'PollAction',
         platforms: ['discord'],
         shortName: 'poll-action',
-        version: {name: '0.0.1'},
+        version: { name: '0.0.1' },
         website: 'https://collab.land',
         description:
           'An example Collab action to illustrate various Discord UI elements',
@@ -114,10 +102,10 @@ export class PollActionController extends BaseDiscordActionController {
    */
   protected async handle(
     interaction: DiscordActionRequest<APIInteraction>,
-  ): Promise<DiscordActionResponse> {
+  ): Promise<DiscordActionResponse | undefined> {
     if (
-      interaction.type === InteractionType.MessageComponent &&
-      interaction.data.custom_id === 'poll:button:modal'
+      interaction.type === InteractionType.ApplicationCommand &&
+      interaction.data.name === 'poll'
     ) {
       const data = new ModalBuilder()
         .setTitle('Example modal')
@@ -125,17 +113,17 @@ export class PollActionController extends BaseDiscordActionController {
         .addComponents(
           new ActionRowBuilder<ModalActionRowComponentBuilder>().addComponents(
             new TextInputBuilder()
-              .setCustomId('poll:text:interaction')
-              .setLabel('Interaction')
+              .setCustomId('poll:text:description')
+              .setLabel('Poll Description')
               .setStyle(TextInputStyle.Paragraph)
-              .setValue(this.describeInteraction(interaction)),
+              .setPlaceholder('Hello')
           ),
           new ActionRowBuilder<ModalActionRowComponentBuilder>().addComponents(
             new TextInputBuilder()
-              .setCustomId('poll:text:interaction-data')
-              .setLabel('Interaction data')
+              .setCustomId('poll:text:options')
+              .setLabel('Options for the poll')
               .setStyle(TextInputStyle.Paragraph)
-              .setValue(this.renderInteractionData(interaction, false)),
+              .setPlaceholder('World')
           ),
         )
         .toJSON();
@@ -144,109 +132,38 @@ export class PollActionController extends BaseDiscordActionController {
         data,
       };
     }
-    const response: APIInteractionResponse = {
-      type: InteractionResponseType.ChannelMessageWithSource,
-      data: {
-        flags: MessageFlags.Ephemeral,
-        embeds: [
-          new EmbedBuilder()
-            .setTitle('embed: Interaction')
-            .setDescription(this.describeInteraction(interaction))
-            .toJSON(),
-          new EmbedBuilder()
-            .setTitle('embed: Request data')
-            .setDescription(this.renderInteractionData(interaction))
-            .toJSON(),
-        ],
-        components: [
-          new ActionRowBuilder<MessageActionRowComponentBuilder>()
-            .addComponents([
-              new ButtonBuilder()
-                .setLabel('link: Request/response')
-                .setURL(
-                  `http://localhost:3000/poll-action/interactions/${interaction.id}`,
-                )
-                .setStyle(ButtonStyle.Link),
-              new ButtonBuilder()
-                .setLabel('button: Click me')
-                .setCustomId('poll:button:click')
-                .setStyle(ButtonStyle.Success),
-              new ButtonBuilder()
-                .setLabel('button: Render a modal')
-                .setCustomId('poll:button:modal')
-                .setStyle(ButtonStyle.Primary),
-            ])
-            .toJSON(),
+    if (interaction.type === InteractionType.ModalSubmit) {
+      const description = interaction.data.components[0].components[0].value
+      const options = interaction.data.components[1].components[0].value.trim()
+      const choices = options.split('\n')
+      console.log(choices)
+      const buttons = choices.map((c, index) => {
+        return new ButtonBuilder()
+          .setLabel(c)
+          .setCustomId(`poll:button:${index}`)
+          .setStyle(ButtonStyle.Success)
+      })
+      return {
+        type: InteractionResponseType.ChannelMessageWithSource, data: {
+          embeds: [new EmbedBuilder().setTitle(description).setDescription(options).toJSON()],
+          components: [
+            new ActionRowBuilder<MessageActionRowComponentBuilder>()
+              .addComponents(
+                buttons
+              )
+              .toJSON(),]
+        }
+      }
+    }
+    if (interaction.type === InteractionType.MessageComponent) {
+      if (interaction.data.component_type === ComponentType.Button) {
+        const customId = interaction.data.custom_id
+        const index = customId.split(':')[2]
+        //const label = choices[index]
+        return { type: InteractionResponseType.ChannelMessageWithSource, data: { content: index } }
+      }
 
-          new ActionRowBuilder<MessageActionRowComponentBuilder>()
-            .addComponents(
-              new StringSelectMenuBuilder()
-                .setCustomId('poll:select:string')
-                .setPlaceholder('string-select-menu: Select a color')
-                .addOptions(
-                  new StringSelectMenuOptionBuilder()
-                    .setLabel('Red')
-                    .setValue('red'),
-                  new StringSelectMenuOptionBuilder()
-                    .setLabel('Green')
-                    .setValue('green'),
-                  new StringSelectMenuOptionBuilder()
-                    .setLabel('Blue')
-                    .setValue('blue'),
-                ),
-            )
-            .toJSON(),
-
-          new ActionRowBuilder<MessageActionRowComponentBuilder>()
-            .addComponents(
-              new RoleSelectMenuBuilder()
-                .setCustomId('poll:select:role')
-                .setPlaceholder('role-select-menu: Select a role'),
-            )
-            .toJSON(),
-
-          new ActionRowBuilder<MessageActionRowComponentBuilder>()
-            .addComponents(
-              new UserSelectMenuBuilder()
-                .setCustomId('poll:select:user')
-                .setPlaceholder('user-select-menu: Select a user'),
-              /*
-              new ChannelSelectMenuBuilder()
-                .setCustomId('poll:select:channel')
-                .setPlaceholder('channel-select-menu: Select a channel'),
-                */
-            )
-            .toJSON(),
-        ],
-      },
-    };
-    this.interactions.push({
-      request: interaction,
-      response,
-      timestamp: Date.now(),
-    });
-    return response;
-  }
-
-  private renderInteractionData(
-    interaction: DiscordActionRequest<APIInteraction>,
-    md = true,
-  ): string {
-    const data = stringify(interaction.data);
-    return md ? '```json\n' + data + '```' : data;
-  }
-
-  private describeInteraction(
-    interaction: DiscordActionRequest<APIInteraction>,
-  ): string {
-    return `Interaction id: ${interaction.id}
-Interaction type: ${interaction.type}            
-Application id: ${interaction.application_id}
-Guild id: ${interaction.guild_id}
-Channel id: ${interaction.channel_id}
-User id: ${interaction.member?.user.id}
-User name: ${interaction.member?.user.username}#${interaction.member?.user.discriminator}            
-`;
+    }
   }
 
   /**

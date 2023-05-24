@@ -1,4 +1,7 @@
 import {getFetch, handleFetchResponse, stringify} from '@collabland/common';
+type Vote = {poll_id: string,
+option_id:  string,
+identifier: string,}
 
 type Option = {
   data: null | string;
@@ -8,7 +11,7 @@ type Option = {
   created_at: string;
   updated_at: string;
   id: string;
-  entity: "Option";
+  entity: 'Option';
 };
 
 type Poll = {
@@ -18,16 +21,15 @@ type Poll = {
   created_at: string;
   updated_at: string;
   id: string;
-  entity: "Poll";
+  entity: 'Poll';
   options: Option[];
 };
 
 type ApiResponse = {
-  status: "success";
+  status: 'success';
   statusCode: number;
   data: Poll;
 };
-
 
 export class Pollsapi {
   private fetch = getFetch({
@@ -61,7 +63,22 @@ export class Pollsapi {
     const data = await handleFetchResponse(response);
     return data;
   }
-}
+  async createVote(vote:Vote) {
+    
+    const url = 'https://api.pollsapi.com/v1/create/vote';
+
+
+    const requestOptions = {
+      method: 'POST',
+      body: JSON.stringify(vote),
+    };
+    const response = await this.fetch(url, requestOptions)
+    const data = await handleFetchResponse(response);
+    return data;
+        // Handle the response data here
+      }
+        // Handle any errors that occur during the request
+      };
 
 async function main() {
   const api = new Pollsapi();

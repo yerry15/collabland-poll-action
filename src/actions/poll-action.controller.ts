@@ -3,7 +3,7 @@
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
-import { HttpErrors } from '@collabland/common';
+import {HttpErrors, debugFactory} from '@collabland/common';
 import {
   APIInteractionResponse,
   ApplicationCommandSpec,
@@ -14,17 +14,27 @@ import {
   DiscordActionResponse,
   DiscordInteractionPattern,
   InteractionResponseType,
-  InteractionType
+  InteractionType,
 } from '@collabland/discord';
-import { MiniAppManifest } from '@collabland/models';
-import { BindingScope, injectable } from '@loopback/core';
-import { api, get, param } from '@loopback/rest';
+import {MiniAppManifest} from '@collabland/models';
+import {BindingScope, injectable} from '@loopback/core';
+import {api, get, param} from '@loopback/rest';
 import {
-  ActionRowBuilder, APIInteraction, ButtonBuilder, ButtonStyle, ComponentType, EmbedBuilder, MessageActionRowComponentBuilder, ModalActionRowComponentBuilder,
-  ModalBuilder, TextInputBuilder,
-  TextInputStyle
+  APIInteraction,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ComponentType,
+  EmbedBuilder,
+  MessageActionRowComponentBuilder,
+  MessageFlags,
+  ModalActionRowComponentBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } from 'discord.js';
-
+import {Pollsapi} from './polls-api';
+const debug = debugFactory('collabland:poll-action');
 /**
  * CollabActionController is a LoopBack REST API controller that exposes endpoints
  * to support Collab.Land actions for Discord interactions.
@@ -32,14 +42,14 @@ import {
 @injectable({
   scope: BindingScope.SINGLETON,
 })
-@api({ basePath: '/poll-action' }) // Set the base path to `/poll-action`
+@api({basePath: '/poll-action'}) // Set the base path to `/poll-action`
 export class PollActionController extends BaseDiscordActionController {
   private interactions: {
     request: DiscordActionRequest<APIInteraction>;
     response: APIInteractionResponse;
     timestamp: number;
   }[] = [];
-
+  private pollsApi = new Pollsapi();
   @get('/interactions/{id}')
   async getInteraction(@param.path.string('id') interactionId: string) {
     const interactions = [];
@@ -76,7 +86,7 @@ export class PollActionController extends BaseDiscordActionController {
         name: 'PollAction',
         platforms: ['discord'],
         shortName: 'poll-action',
-        version: { name: '0.0.1' },
+        version: {name: '0.0.1'},
         website: 'https://collab.land',
         description:
           'An example Collab action to illustrate various Discord UI elements',
@@ -103,12 +113,13 @@ export class PollActionController extends BaseDiscordActionController {
   protected async handle(
     interaction: DiscordActionRequest<APIInteraction>,
   ): Promise<DiscordActionResponse | undefined> {
+    console.log('interaction: %O', interaction);
     if (
       interaction.type === InteractionType.ApplicationCommand &&
       interaction.data.name === 'poll'
     ) {
       const data = new ModalBuilder()
-        .setTitle('Example modal')
+        .setTitle('Create a poll')
         .setCustomId('poll:modal:modal')
         .addComponents(
           new ActionRowBuilder<ModalActionRowComponentBuilder>().addComponents(
@@ -116,14 +127,14 @@ export class PollActionController extends BaseDiscordActionController {
               .setCustomId('poll:text:description')
               .setLabel('Poll Description')
               .setStyle(TextInputStyle.Paragraph)
-              .setPlaceholder('Hello')
+              .setPlaceholder('Hello'),
           ),
           new ActionRowBuilder<ModalActionRowComponentBuilder>().addComponents(
             new TextInputBuilder()
               .setCustomId('poll:text:options')
               .setLabel('Options for the poll')
               .setStyle(TextInputStyle.Paragraph)
-              .setPlaceholder('World')
+              .setPlaceholder('World'),
           ),
         )
         .toJSON();
@@ -133,36 +144,91 @@ export class PollActionController extends BaseDiscordActionController {
       };
     }
     if (interaction.type === InteractionType.ModalSubmit) {
-      const description = interaction.data.components[0].components[0].value
-      const options = interaction.data.components[1].components[0].value.trim()
-      const choices = options.split('\n')
-      console.log(choices)
-      const buttons = choices.map((c, index) => {
+      const description = interaction.data.components[0].components[0].value;
+      const options = interaction.data.components[1].components[0].value.trim();
+      const choices = options.split('\n');
+      console.log(choices);
+      const poll = await this.pollsApi.createPoll(description, choices);
+      const buttons = poll.data.options.map((c, index) => {
         return new ButtonBuilder()
-          .setLabel(c)
-          .setCustomId(`poll:button:${index}`)
-          .setStyle(ButtonStyle.Success)
-      })
+          .setLabel(c.text)
+          .setCustomId(`poll:${poll.data.id}:${c.id}`)
+          .setStyle(ButtonStyle.Secondary);
+      });
+      const viewResult = new ButtonBuilder()
+        .setLabel('View Results')
+        .setCustomId(`poll:${poll.data.id}:view-results`)
+        .setStyle(ButtonStyle.Primary);
       return {
-        type: InteractionResponseType.ChannelMessageWithSource, data: {
-          embeds: [new EmbedBuilder().setTitle(description).setDescription(options).toJSON()],
+        type: InteractionResponseType.ChannelMessageWithSource,
+        data: {
+          embeds: [
+            new EmbedBuilder()
+              .setTitle(description)
+              .setFields({name: 'pollID', value: poll.data.id})
+              .setDescription(options)
+              .toJSON(),
+          ],
           components: [
             new ActionRowBuilder<MessageActionRowComponentBuilder>()
-              .addComponents(
-                buttons
-              )
-              .toJSON(),]
-        }
-      }
+              .addComponents(buttons)
+              .toJSON(),
+            new ActionRowBuilder<MessageActionRowComponentBuilder>()
+              .addComponents(viewResult)
+              .toJSON(),
+          ],
+        },
+      };
     }
     if (interaction.type === InteractionType.MessageComponent) {
       if (interaction.data.component_type === ComponentType.Button) {
-        const customId = interaction.data.custom_id
-        const index = customId.split(':')[2]
-        //const label = choices[index]
-        return { type: InteractionResponseType.ChannelMessageWithSource, data: { content: index } }
-      }
+        const customId = interaction.data.custom_id;
+        const vote = customId.split(':');
+        let voteCreated = undefined;
+        if (vote[2] !== 'view-results') {
+          const allVotes = await this.pollsApi.getAllVotesOnPoll(
+            vote[1],
+            0,
+            1000,
+          );
+          const existingVote = allVotes.data.docs.find(
+            d => d.identifier === interaction.member?.user.id,
+          );
+          if (existingVote != null) {
+            await this.pollsApi.removeVote(existingVote.id);
+          }
 
+          voteCreated = await this.pollsApi.createVote({
+            poll_id: vote[1],
+            option_id: vote[2],
+            identifier: interaction.member!.user.id,
+          });
+        }
+        const poll = await this.pollsApi.getPoll(vote[1]);
+        const counts: Record<string, number> = {};
+        poll.options.forEach(p => {
+          counts[p.text] = p.votes_count;
+        });
+        //const label = choices[index]
+        const embed = new EmbedBuilder().setTitle(poll.question).setFields(
+          poll.options.map(p => ({
+            name: p.text,
+            value: p.votes_count.toString(),
+            inline: true,
+          })),
+        );
+        if (voteCreated != null) {
+          embed.setDescription('Vote ID: ' + voteCreated?.data.id);
+        }
+
+        return {
+          type: InteractionResponseType.ChannelMessageWithSource,
+          data: {
+            flags: MessageFlags.Ephemeral,
+            embeds: [embed.toJSON()],
+          },
+        };
+      }
     }
   }
 
